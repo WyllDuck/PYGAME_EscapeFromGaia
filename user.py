@@ -2,6 +2,7 @@
 import pygame as py
 from math import sqrt, atan, pi, cos, sin
 import time
+import uuid
 
 #Configuration
 import conf
@@ -25,8 +26,10 @@ class Character(py.sprite.Sprite):
         self.count = 0
         self.nframes = len(self.llista_im[0])
         self.image = self.llista_im[self.estat][0]
-        self.rect = self.image.get_rect().move(pos)
+        self.rect = self.image.get_rect()
+        self.rect.center = pos
         self._map = _map
+        self._id = uuid.uuid4()
 
         self.velocity = conf.velocity_fast
         self.attack = False
@@ -37,6 +40,7 @@ class Character(py.sprite.Sprite):
 
         self.doors = doors
         self.open = False
+        self.life = float(conf.user_life)
 
 
     def check_collision (self, dir):
@@ -48,8 +52,9 @@ class Character(py.sprite.Sprite):
         cond_0 = self._map[int((row + row_add_map + (conf.user_size + conf.tile_size) / 2) // conf.tile_size), int((col + col_add_map + (conf.user_size + conf.tile_size) / 2) // conf.tile_size)]
         cond_1 = self._map[int((row + row_add_map + (conf.user_size + conf.tile_size) / 2) // conf.tile_size), int((col + col_add_map - (conf.user_size - conf.tile_size) / 2) // conf.tile_size)]
         cond_2 = self._map[int((row + row_add_map - (conf.user_size - conf.tile_size) / 2) // conf.tile_size), int((col + col_add_map + (conf.user_size + conf.tile_size) / 2) // conf.tile_size)]
+        cond_3 = self._map[int((row + row_add_map - (conf.user_size - conf.tile_size) / 2) // conf.tile_size), int((col + col_add_map - (conf.user_size - conf.tile_size) / 2) // conf.tile_size)]
 
-        return any((cond_0, cond_1, cond_2))
+        return any((cond_0, cond_1, cond_2, cond_3))
 
 
     def update(self, mouse):
@@ -175,20 +180,16 @@ class Character(py.sprite.Sprite):
                 self.attack_spam = time.time()
 
                 angle_deg, angle_rad = self.get_angle(mouse)
-                im = py.image.load(weapon['sprite_sheet'])
-                im = sprite_sheets.crea_matriu_imatges(im, *weapon['size_sprite_sheet'])
 
-                return Weapon(im, self.rect.center, self._map, [ weapon['velocity'], weapon['size'], [angle_deg, angle_rad], weapon['dispersion'] ])
+                return Weapon(weapon['matrix'], self.rect.center, self._map, [ weapon['velocity'], weapon['size'], [angle_deg, angle_rad], weapon['dispersion'], weapon['damage'], weapon['damage_end'] ], self._id)
 
             # Next Shot
             elif time.time() - self.attack_spam >= weapon['time_spam']:
                 self.attack_spam = time.time()
 
                 angle_deg, angle_rad = self.get_angle(mouse)
-                im = py.image.load(weapon['sprite_sheet'])
-                im = sprite_sheets.crea_matriu_imatges(im, *weapon['size_sprite_sheet'])
 
-                return Weapon(im, self.rect.center, self._map, [ weapon['velocity'], weapon['size'], [angle_deg, angle_rad], weapon['dispersion'] ])
+                return Weapon(weapon['matrix'], self.rect.center, self._map, [ weapon['velocity'], weapon['size'], [angle_deg, angle_rad], weapon['dispersion'], weapon['damage'], weapon['damage_end'] ], self._id)
 
         # Door Change status:
         if self.open:
@@ -215,6 +216,7 @@ class Character(py.sprite.Sprite):
                     pass
 
             self.open = False
+
 
     # Change of selected weapon:
     def change_weapon (self):

@@ -1,5 +1,8 @@
+# Tools:
 import numpy as np
 import networkx as nx
+
+# Configuration:
 import conf
 
 def map_painter(P_Graph):

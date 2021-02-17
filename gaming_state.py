@@ -2,6 +2,10 @@
 import pygame as py
 from pygame.locals import *
 from pgu import engine
+import numpy as np
+import random as rd
+import time
+import uuid
 
 # Configuration:
 import conf
@@ -9,12 +13,13 @@ import sprite_sheets
 
 #Others:
 from run import run
-from map2D_gen import map_painter
-from tile_main import Tile, TileMiniMap, UserMiniMap, Door, LifebarBackground, Lifebar
+from tile_main import Tile, TileMiniMap, UserMiniMap, Door, LifebarBackground, Lifebar, DinamicTileLight, DinamicTilePipeline, DinamicTileEyeBox, DinamicTeleport
 from user import Character
 from tile_type import type_detector
 from camera import Camera
 from weapon import MiniatureWeapon
+from enemy import Enemy
+from sprites_menu import Background
 
 ####################################
 #           GAME
@@ -23,8 +28,17 @@ from weapon import MiniatureWeapon
 class Gaming(engine.State):
 
     def init(self):
-        P_Graph, R_Graph, doors = run()
-        _map = map_painter( P_Graph )
+
+        P_Graph, R_Graph, M_Graph, doors, _map, room_init, room_end = run(debugger = conf.debugger)
+
+        # Saving variables:
+        self.room_end = room_end
+        self.M_Graph = M_Graph
+        self.R_Graph = R_Graph
+        self.switch = False
+
+        # Note: After X time of not receiving any damage health will be recorvered to some Y level at Z speed
+        self.time_damage = time.time()
 
         # Tiles:
         self.tile_group = py.sprite.Group()
@@ -46,12 +60,39 @@ class Gaming(engine.State):
         # Doors:
         self.door_group = py.sprite.Group()
 
+        # Enemies:
+        self.enemy_group = py.sprite.Group()
+
+        # Dynamic Obstacles:
+        self.dynamic_group = py.sprite.Group()
+
+        # Dynamic Obstacles (with ""user_pos""):
+        self.dynamic_user_group = py.sprite.Group()
+
+        # Loading [ Light // Pipeline ] Obstacle matrix for further use in the program:
+        im = py.image.load(conf.dinamic_obtacles['light'][1])
+        mat_im_light = sprite_sheets.crea_matriu_imatges(im, *conf.dinamic_obtacles['light'][0])
+
+        im = py.image.load(conf.dinamic_obtacles['pipeline'][1])
+        mat_im_pipeline = sprite_sheets.crea_matriu_imatges(im, *conf.dinamic_obtacles['pipeline'][0])
+
+        im = py.image.load(conf.dinamic_obtacles['eyeBox'][1])
+        mat_im_eyeBox = sprite_sheets.crea_matriu_imatges(im, *conf.dinamic_obtacles['eyeBox'][0])
+
+        im = py.image.load(conf.dinamic_obtacles['teletransporter'][1])
+        mat_im_teletransporter = sprite_sheets.crea_matriu_imatges(im, *conf.dinamic_obtacles['teletransporter'][0])
+
+        del(im)
+
+        # Background Image:
+        self.game_background = Background(conf.game_background)
+
         for row in range(len(_map)):
             for col in range(len(_map[row, :])):
 
                 # Floor Tile:
                 if _map[row, col] == 0:
-                    tile = Tile(conf.floor_image)
+                    tile = Tile(conf.floor_image if np.random.choice(2, 1, p=[0.1, 0.9])[0] == 1 else conf.floor_broken_image )
                     tile.rect.center = (col * conf.tile_size, row * conf.tile_size)
                     self.tile_group.add(tile)
 
@@ -78,9 +119,56 @@ class Gaming(engine.State):
                     tile_minimap.rect.center = (col * conf.tile_size_mini_map + conf.position_mini_map[0], row * conf.tile_size_mini_map + conf.position_mini_map[1])
                     self.mini_map.add(tile_minimap)
 
+                # Obstacles
+                elif _map[row, col] in [2,3,4,5,10,-1]:
+                    if _map[row, col] == 2:
+                        tile = Tile(rd.choice(conf.static_obstacles_images))
+                        tile.rect.center = (col * conf.tile_size, row * conf.tile_size)
+                        self.tile_group.add(tile)
+
+                    elif _map[row, col] == 3:
+                        tile = DinamicTileLight(mat_im_light)
+                        tile.rect.center = (col * conf.tile_size, row * conf.tile_size)
+                        self.dynamic_group.add(tile)
+
+                    elif _map[row, col] == 4:
+                        tile = DinamicTileEyeBox(mat_im_eyeBox)
+                        tile.rect.center = (col * conf.tile_size, row * conf.tile_size)
+                        self.dynamic_user_group.add(tile)
+
+                    elif _map[row, col] == 5:
+                        tile = DinamicTilePipeline(mat_im_pipeline)
+                        tile.rect.center = (col * conf.tile_size, row * conf.tile_size)
+                        self.dynamic_group.add(tile)
+
+                    # Here we add the initial and final platform:
+                    elif _map[row, col] == -1:
+                        tile = DinamicTileEyeBox(mat_im_teletransporter)
+                        tile.rect.center = (col * conf.tile_size, row * conf.tile_size)
+                        self.dynamic_user_group.add(tile)
+                        _map[row, col] = 0
+
+                    elif _map[row, col] == 10:
+                        tile = Tile(conf.floor_image if np.random.choice(2, 1, p=[0.1, 0.9])[0] == 1 else conf.floor_broken_image )
+                        tile.rect.center = (col * conf.tile_size, row * conf.tile_size)
+                        self.tile_group.add(tile)
+
+                    # Minimap:
+                    # Note: Here we need to handle the -1 tag of ""room_init"" and ""room_end""
+                    if _map[row, col] != 0:
+                        tile_minimap = TileMiniMap(conf.obstacle_image_minimap)
+                        tile_minimap.rect.center = (col * conf.tile_size_mini_map + conf.position_mini_map[0], row * conf.tile_size_mini_map + conf.position_mini_map[1])
+                        self.mini_map.add(tile_minimap)
+
+                    else:
+                        tile_minimap = TileMiniMap(conf.init_end_image_minimap)
+                        tile_minimap.rect.center = (col * conf.tile_size_mini_map + conf.position_mini_map[0], row * conf.tile_size_mini_map + conf.position_mini_map[1])
+                        self.mini_map.add(tile_minimap)
+
+
         # Doors
         for door in doors:
-            tile = Door(conf.door_close_image)
+            tile = Door(conf.door_close_image, door.orientation)
             tile.rect.center = (door.col * conf.tile_size ,door.row * conf.tile_size)
             self.door_group.add(tile)
 
@@ -88,11 +176,43 @@ class Gaming(engine.State):
         im = py.image.load(conf.sprite_sheet_personatge)
         self.grup = py.sprite.Group() # grup de Sprites
         mat_im = sprite_sheets.crea_matriu_imatges(im, *conf.mides_sprite_sheet_personatge)
-        self.heroi = Character( mat_im, conf.posicio_personatge, _map, self.door_group)
+
+        self.heroi = Character( mat_im, tuple(coord * conf.tile_size for coord in room_init.center)[::-1], _map, self.door_group)
         self.grup.add(self.heroi)
 
         # Camera:
         self.camera = Camera(conf.screen_size[0], conf.screen_size[1])
+
+        # Enemies:
+        if conf.allow_enemies:
+
+            for room in self.R_Graph.R.nodes():
+
+                # Note: We don't want to have enemies in the initial and final rooms
+                if room == room_end or room == room_init:
+                    continue
+
+                enemies = list(conf.enemy_dict.keys())
+                enemies_number = room.size * conf.enemy_density
+
+                while enemies_number > 0:
+
+                    # Chose random position:
+                    row, col = np.where( _map[room.topleft.row: room.bottomleft.row, room.topleft.col: room.topright.col] == 0 )
+                    i = np.random.randint(len(row))
+                    row, col = (row[i] + room.topleft.row, col[i] +  room.topleft.col)
+                    del(i)
+                    position = [row * conf.tile_size, col * conf.tile_size][::-1]
+
+                    # Chose random enemy:
+                    enemy = conf.enemy_dict[np.random.choice(enemies, p = conf.probablity_enemies)]
+
+                    # Count enemy weight in room density:
+                    enemies_number -= enemy['weight']
+
+                    enemy_params = [enemy['selected_weapon'], enemy['velocity'],  enemy['attack_perimeter'],  enemy['follow_perimeter'], enemy['life'], enemy['size'], enemy['desfase'], enemy['follow_perimeter_secondary']]
+                    enemy = Enemy(enemy['sprite'], position, _map, M_Graph, enemy_params, self.door_group)
+                    self.enemy_group.add( enemy )
 
 
     # The paint method is called once.  If you call repaint(), it
@@ -144,7 +264,6 @@ class Gaming(engine.State):
 
             #   Attack:
             if space:
-                self.lifebar.update(20)
                 self.heroi.attack = True
             else:
                 self.heroi.attack = False
@@ -163,19 +282,70 @@ class Gaming(engine.State):
             if esc:
                 return self.game.change_state('PAUSE')
 
+        # Go to next level:
+        if self.action(self.heroi.rect.center) and not self.switch:
+            self.switch = True
+            self.clock = time.time()
+            self.heroi.canvia_estat(self.heroi.VES_STOP)
+
+        if self.switch:
+            self.heroi.canvia_estat(self.heroi.VES_STOP)
+            if time.time() - self.clock >= conf.wait_time:
+                if self.game.count != conf.number_levels - 1:
+                    return self.game.change_state('NEXT_LEVEL')
+                else:
+                    return self.game.change_state('MISSION_ACCOMPLISHED')
+
+    # Subfunction:
+    def action (self, user_pos):
+
+        # Position user next level trap
+        cercle_row, cercle_col = [coord * conf.tile_size for coord in self.room_end.center]
+        perimeter = lambda x, y: (x - cercle_row )**2 + (y - cercle_col )**2
+        return perimeter(user_pos[1], user_pos[0]) <= ( conf.room_transporter_detection_perimeter * conf.tile_size ) ** 2
+
 
     # Loop is called once a frame.  It should contain all the logic.
     # If the loop method returns a value it will become the new state.
     def loop(self):
+
+        enemies_remove = dict()
+        enemies_pos = list( (sprite._id, sprite.rect.center, sprite.size ) for sprite in self.enemy_group if sprite.state != sprite.DEAD)
+
         weapon = self.heroi.update(py.mouse.get_pos())
         if weapon:
             self.weapon_group.add(weapon)
 
         # Detect end on cycle of a weapon:
         for weapon in self.weapon_group:
-            _del = weapon.update()
-            if _del:
+            _del = weapon.update(enemies_pos, self.heroi.rect.center, self.heroi._id)
+
+            # Note: This if statement is true is the user shots a weapon to an enemy
+            if type(_del) == uuid.UUID and weapon.active_damage and weapon._id == self.heroi._id:
+                if _del in enemies_remove:
+                    enemies_remove[ _del ].append(weapon.damage)
+                else:
+                    enemies_remove[ _del ] = [weapon.damage]
+                weapon.active_damage = False
+
+            # Note: This if statement is true is the enemy shots to the user:
+            elif type(_del) == uuid.UUID and weapon.active_damage and weapon._id != self.heroi._id:
+                if not conf.immortality:
+                    move_lifebar = int((conf.lifebar_size[0] / conf.user_life) * weapon.damage)
+                    self.heroi.life -=  (conf.user_life / conf.lifebar_size[0]) * move_lifebar
+                    weapon.active_damage = False
+                    self.lifebar.update( move_lifebar )
+                    self.time_damage = time.time()
+
+            # Note: This if statement is true is the weapon ends he's life cycle
+            elif type(_del) == bool:
                 self.weapon_group.remove(weapon)
+
+            # Nothing happens:
+            elif type(_del) == type(None):
+                pass
+            else:
+                pass
 
         # Weapon miniature on Lifebar Background:
         if not self.miniature_weapon == conf.weapon_dict[ self.heroi.inventory_weapons[self.heroi.selected_weapon] ]:
@@ -185,17 +355,66 @@ class Gaming(engine.State):
         self.user_minimap.update(self.heroi.rect.center)
         self.door_group.update()
 
+        # Enemies:
+        for enemy in self.enemy_group:
+
+            # Damage enemies:
+            if enemy._id in enemies_remove.keys():
+                enemy.life -= sum(enemies_remove[enemy._id])
+                enemy.state = enemy.DAMAGE
+
+            enemies_pos = list( (sprite._id, sprite.rect.center, sprite.size + conf.security_area ) for sprite in self.enemy_group if sprite.state != sprite.DEAD )
+            weapon = enemy.update( self.heroi.rect.center, enemies_pos)
+
+            if weapon:
+                self.weapon_group.add(weapon)
+
+        # Dynamic Obstacles:
+        self.dynamic_group.update()
+
+        # Dynamic Obstacles (with ""user_pos""):
+        self.dynamic_user_group.update(self.heroi.rect.center)
+
+        # Health Recover Mecanism:
+        if time.time() - self.time_damage > conf.life_recovery_waiting_time and self.heroi.life < conf.life_recovery_limit:
+            move_lifebar = int((conf.lifebar_size[0] / conf.user_life) * conf.life_recovery)
+            self.heroi.life +=  (conf.user_life / conf.lifebar_size[0]) * move_lifebar
+            self.lifebar.update( - move_lifebar)
+
+
     # Update is called once a frame. It should update the display.
     def update(self,screen):
+
         screen.fill(conf.background_color)
+
+        # Background Image:
+        screen.blit(self.game_background.image, self.game_background.rect)
 
         # Tiles
         for sprite in self.tile_group:
             screen.blit(sprite.image, self.camera.apply(sprite))
 
+        # Dynamic Obstacles:
+        for sprite in self.dynamic_group:
+            screen.blit(sprite.image, self.camera.apply(sprite))
+
+        # Dynamic Obstacles (with ""user_pos""):
+        for sprite in self.dynamic_user_group:
+            screen.blit(sprite.image, self.camera.apply(sprite))
+
         # Doors
         for sprite in self.door_group:
             screen.blit(sprite.image, self.camera.apply(sprite))
+
+        # Enemies
+        # Note: Dead enemies must be printed first
+        for sprite in self.enemy_group:
+            if sprite.state == sprite.DEAD:
+                screen.blit(sprite.image, self.camera.apply(sprite))
+
+        for sprite in self.enemy_group:
+            if sprite.state != sprite.DEAD:
+                screen.blit(sprite.image, self.camera.apply(sprite))
 
         # User
         for sprite in self.grup:
@@ -219,3 +438,7 @@ class Gaming(engine.State):
         screen.blit(self.miniature_weapon.image, self.miniature_weapon.rect)
 
         py.display.flip()
+
+        # Dead Screen logic:
+        if self.heroi.life <= 0:
+            return self.game.change_state('GAMEOVER')

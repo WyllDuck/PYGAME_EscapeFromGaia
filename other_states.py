@@ -215,7 +215,7 @@ class Loading (engine.State):
     def init(self):
 
         # Background:
-        self.background = Background( conf.background_loading_image )
+        self.background = Background( conf.background_loading_image[0] )
 
     # Paint Screen
     def paint(self,screen):
@@ -223,11 +223,16 @@ class Loading (engine.State):
 
     # Handle User Actions
     def event(self,event):
-        return self.game.change_state()
+        if event.type == KEYDOWN and event.key == py.K_SPACE:
+            return self.game.change_state()
 
     # Update Screen
     def loop(self):
         return
+
+    # Update loading image backgroud:
+    def update_loading(self, count):
+        self.background = Background( conf.background_loading_image[count] )
 
     # Update Screen
     def update(self,screen):
