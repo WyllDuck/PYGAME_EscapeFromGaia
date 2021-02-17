@@ -74,6 +74,11 @@ class Character(py.sprite.Sprite):
             # Note: The player rotates around the same point as the old rect
             self.rect = self.image.get_rect(center=self.rect.center)
 
+            # Note: False -> The mouvement DOES depend on the players orientation.
+            #       True  -> The mouvement DOES NOT depend on the players orientation.
+            if (True):
+                angle_rad = pi/2
+
             # Basic States:
             if self.estat == self.AMUNT:
                 col_add, row_add = ( cos( angle_rad ) * self.velocity, - sin( angle_rad ) * self.velocity )
