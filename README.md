@@ -12,3 +12,7 @@ To execute the game run in the folder PYGAME_EscapeFromGaia the following comman
 ```python3 ./game.py```
 
 #### The game has been create as a requirement for a subject in university with the collaboration of a partner. Programing related work was my part, while the artwork relied on my classmate.
+
+## GAMEPLAY
+
+[![Watch a preview of the game!](/doc/gameplay.png)](https://youtu.be/K-twe9AKKQg)
